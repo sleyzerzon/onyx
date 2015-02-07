@@ -9,27 +9,39 @@
   {:core.async/pending-messages (atom {})
    :core.async/replay-ch (chan 1000)})
 
-(defmethod p-ext/read-batch [:input :core.async]
-  [{:keys [onyx.core/task-map core.async/in-chan core.async/replay-ch
-           core.async/pending-messages] :as event}]
-  (let [batch-size (:onyx/batch-size task-map)
-        ms (or (:onyx/batch-timeout task-map) 1000)
-        batch (->> (range batch-size)
-                   (map (fn [_] {:id (java.util.UUID/randomUUID)
-                                :input :core.async
-                                :message (first (alts!! [replay-ch in-chan (timeout ms)] :priority true))}))
-                   (filter (comp not nil? :message)))]
-    (doseq [m batch]
-      (swap! pending-messages assoc (:id m) (:message m)))
-    {:onyx.core/batch batch}))
+(defmethod p-ext/read-segment [:input :core.async]
+  [{:keys [core.async/in-chan core.async/replay-ch
+           core.async/pending-messages] :as event} timeout-ch]
+  (let [msg (first (alts!! [replay-ch in-chan timeout-ch] :priority true))]
+    (when msg
+      (let [rets {:id (java.util.UUID/randomUUID) :input :core.async :message msg}]
+        (swap! pending-messages assoc (:id rets) (:message rets))
+        rets))))
 
-(defmethod p-ext/decompress-batch [:input :core.async]
-  [{:keys [onyx.core/batch]}]
-  {:onyx.core/decompressed batch})
+(defmethod p-ext/decompress-segment [:input :core.async]
+  [event segment]
+  segment)
 
 (defmethod p-ext/apply-fn [:input :core.async]
   [event segment]
   segment)
+
+(defmethod p-ext/apply-fn [:output :core.async]
+  [event segment]
+  segment)
+
+(defmethod p-ext/compress-segment [:output :core.async]
+  [event segment]
+  segment)
+
+(defmethod p-ext/write-segment [:output :core.async]
+  [{:keys [core.async/out-chan]} segment]
+  (>!! out-chan (:message segment)))
+
+(defmethod p-ext/seal-resource [:output :core.async]
+  [{:keys [core.async/out-chan]}]
+  (>!! out-chan :done)
+  {})
 
 (defmethod p-ext/ack-message [:input :core.async]
   [{:keys [core.async/pending-messages]} message-id]
@@ -49,25 +61,6 @@
   (let [x @pending-messages]
     (and (= (count (keys x)) 1)
          (= (first (vals x)) :done))))
-
-(defmethod p-ext/apply-fn [:output :core.async]
-  [event segment]
-  segment)
-
-(defmethod p-ext/compress-batch [:output :core.async]
-  [{:keys [onyx.core/results]}]
-  {:onyx.core/compressed results})
-
-(defmethod p-ext/write-batch [:output :core.async]
-  [{:keys [onyx.core/compressed core.async/out-chan]}]
-  (doseq [segment compressed]
-    (>!! out-chan (:message segment)))
-  {})
-
-(defmethod p-ext/seal-resource [:output :core.async]
-  [{:keys [core.async/out-chan]}]
-  (>!! out-chan :done)
-  {})
 
 (defn take-segments!
   "Takes segments off the channel until :done is found.

@@ -9,20 +9,13 @@
 (defn type-and-medium-dispatch [{:keys [onyx.core/task-map]}]
   [(task-type task-map) (:onyx/medium task-map)])
 
-(defmulti read-batch
-  "Reads :onyx/batch-size segments off the incoming data source.
-   Must return a map with key :onyx.core/batch and value seq representing
-   the ingested segments. The seq must be maps of two keys:
+(defmulti read-segment
+  (fn [event timeout-ch]
+    (type-and-medium-dispatch event)))
 
-   - :input - A keyword representing the task that the message came from
-   - :message - The consumed message"
-  type-and-medium-dispatch)
-
-(defmulti decompress-batch
-  "Decompresses the ingested segments. Must return a map
-   with key :onyx.core/decompressed and value seq representing the
-   decompressed segments."
-  type-and-medium-dispatch)
+(defmulti decompress-segment
+  (fn [event segment]
+    (type-and-medium-dispatch event)))
 
 (defmulti apply-fn
   "Applies a function to a decompressed segment. Returns a segment
@@ -30,14 +23,14 @@
   (fn [event segment]
     (type-and-medium-dispatch event)))
 
-(defmulti compress-batch
-  "Compresses the segments that result from function application. Must return
-   key :onyx.core/compressed and value seq representing the compression of the segments."
-  type-and-medium-dispatch)
+(defmulti compress-segment
+  (fn [event segment]
+    (type-and-medium-dispatch segment)))
 
-(defmulti write-batch
+(defmulti write-segment
   "Writes segments to the outgoing data source. Must return a map."
-  type-and-medium-dispatch)
+  (fn [event segment]
+    (type-and-medium-dispatch segment)))
 
 (defmulti seal-resource
   "Closes any resources that remain open during a task being executed.
