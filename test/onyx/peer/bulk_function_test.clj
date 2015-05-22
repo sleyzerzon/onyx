@@ -21,8 +21,11 @@
 
 (def batch-size 5)
 
-(defn my-inc [segments]
+#_(defn my-inc [segments]
   :ignored)
+
+(defn my-inc [{:keys [n] :as segment}]
+  (assoc segment :n (inc n)))
 
 (def catalog
   [{:onyx/name :in
@@ -36,7 +39,7 @@
    {:onyx/name :inc
     :onyx/fn :onyx.peer.bulk-function-test/my-inc
     :onyx/type :function
-    :onyx/bulk? true
+    ;:onyx/bulk? true
     :onyx/batch-size batch-size}
 
    {:onyx/name :out
