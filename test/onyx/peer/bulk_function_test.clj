@@ -25,7 +25,7 @@
   :ignored)
 
 (defn my-inc [{:keys [n] :as segment}]
-  (assoc segment :n (inc n)))
+  segment)
 
 (def catalog
   [{:onyx/name :in
