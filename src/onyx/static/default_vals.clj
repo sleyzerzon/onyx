@@ -3,7 +3,7 @@
 (def defaults
   {; input task defaults
    :onyx/input-retry-timeout 1000
-   :onyx/pending-timeout 60000
+   :onyx/pending-timeout 180000
    :onyx/max-pending 10000
 
    ; task defaults
