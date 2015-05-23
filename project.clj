@@ -26,3 +26,4 @@
                              [codox "0.8.8"]]}
              :circle-ci {:jvm-opts ["-Xmx3g"]}}
   :codox {:output-dir "doc/api"})
+
