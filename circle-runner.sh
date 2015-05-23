@@ -6,7 +6,6 @@ if [ $CIRCLE_BRANCH == "master" ]; then
 	export TEST_CHECK_FACTOR=20
 fi
 
-
 i=0
 files=""
 
@@ -25,6 +24,8 @@ done
 # Run generative tests on all nodes to more evently distribute run time
 # If they're taking too long we can reduce the TEST_CHECK_FACTOR
 files+=" "$TEST_NSES_GENERATIVE
+
+echo "Running " $files
 
 export TEST_TRANSPORT_IMPL=$1 
 lein with-profile dev,circle-ci midje $files
