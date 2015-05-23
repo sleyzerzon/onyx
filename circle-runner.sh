@@ -2,8 +2,15 @@
 
 set -e
 
-if [ $CIRCLE_BRANCH == "master" ]; then
-	export TEST_CHECK_FACTOR=20
+
+if [ -z "$CIRCLE_BRANCH" ]; then
+	export BR=$CI_BRANCH
+else
+	export BR=$CIRCLE_BRANCH
+fi
+
+if [ $BR == "master" ]; then
+	export TEST_CHECK_FACTOR=5
 fi
 
 i=0
