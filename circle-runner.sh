@@ -10,10 +10,10 @@ fi
 i=0
 files=""
 
-TEST_NSES=$(find test -name "*.clj" |sed s/test\\///|sed s/\\//\\./g|sed s/".clj$"//|sed s/"_"/"-"/g|tr '\n' ' '|sort)
+TEST_NSES_NONGEN=$(find test -name "*.clj" |sed s/test\\///|sed s/\\//\\./g|sed s/".clj$"//|sed s/"_"/"-"/g|grep -v gen | tr '\n' ' '|sort)
+TEST_NSES_GENERATIVE=$(find test -name "*.clj" |sed s/test\\///|sed s/\\//\\./g|sed s/".clj$"//|sed s/"_"/"-"/g | grep gen | tr '\n' ' '|sort)
 
-
-for file in $TEST_NSES
+for file in $TEST_NSES_NONGEN
 do
   if [ $(($i % $CIRCLE_NODE_TOTAL)) -eq $CIRCLE_NODE_INDEX ]
   then
@@ -22,7 +22,9 @@ do
   ((++i))
 done
 
-echo "Testing " $files
+# Run generative tests on all nodes to more evently distribute run time
+# If they're taking too long we can reduce the TEST_CHECK_FACTOR
+files+=" "$TEST_NSES_GENERATIVE
 
 export TEST_TRANSPORT_IMPL=$1 
 lein with-profile dev,circle-ci midje $files
