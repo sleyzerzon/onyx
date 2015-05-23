@@ -6,15 +6,12 @@ if [ $CIRCLE_BRANCH == "master" ]; then
 	export TEST_CHECK_FACTOR=20
 fi
 
-echo "total " $CIRCLE_NODE_TOTAL
-echo "index " $CIRCLE_NODE_INDEX
 
 i=0
 files=""
 
 TEST_NSES=$(find test -name "*.clj" |sed s/test\\///|sed s/\\//\\./g|sed s/".clj$"//|sed s/"_"/"-"/g|tr '\n' ' '|sort)
 
-echo "Testing " $TEST_NSES
 
 for file in $TEST_NSES
 do
@@ -24,6 +21,8 @@ do
   fi
   ((++i))
 done
+
+echo "Testing " $files
 
 export TEST_TRANSPORT_IMPL=$1 
 lein with-profile dev,circle-ci midje $files
