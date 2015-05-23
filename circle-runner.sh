@@ -6,6 +6,8 @@ if [ $CIRCLE_BRANCH == "master" ]; then
 	export TEST_CHECK_FACTOR=20
 fi
 
+echo "total " $CIRCLE_NODE_TOTAL
+echo "index " $CIRCLE_NODE_INDEX
 
 i=0
 files=""
