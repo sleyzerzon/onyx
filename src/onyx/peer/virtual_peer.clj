@@ -49,6 +49,10 @@
             (when (:lifecycle state)
               (component/stop @(:lifecycle state)))))))
     (catch Throwable e
+      (when (or (instance? org.apache.zookeeper.KeeperException$ConnectionLossException e)
+                (instance? org.apache.zookeeper.KeeperException$SessionExpiredException e))
+        (taoensso.timbre/info e "Virtual Peer encountered restartable exception. Restarting.")
+        (>!! restart-ch :restart))
       (taoensso.timbre/info e))
     (finally
      (taoensso.timbre/info "Fell out of processing loop"))))
