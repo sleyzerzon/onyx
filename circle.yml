@@ -6,6 +6,7 @@ test:
     - ./circle-runner.sh netty:
         timeout: 360
         parallel: true
+    - cp onyx.log $CIRCLE_ARTIFACTS
 
 machine:
   java:
