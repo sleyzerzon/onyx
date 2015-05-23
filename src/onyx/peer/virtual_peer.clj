@@ -6,7 +6,14 @@
               [onyx.peer.operation :as operation]
               [onyx.peer.task-lifecycle :refer [task-lifecycle]]
               [onyx.log.entry :refer [create-log-entry]]
-              [onyx.static.default-vals :refer [defaults]]))
+              [onyx.static.default-vals :refer [defaults]])
+    (:import [org.apache.zookeeper 
+              KeeperException$ConnectionLossException 
+              KeeperException$SessionExpiredException]))
+
+(def restartable-exceptions 
+  #{org.apache.zookeeper.KeeperException$ConnectionLossException
+    org.apache.zookeeper.KeeperException$SessionExpiredException})
 
 (defn send-to-outbox [{:keys [outbox-ch] :as state} reactions]
   (if (:stall-output? state)
@@ -49,8 +56,7 @@
             (when (:lifecycle state)
               (component/stop @(:lifecycle state)))))))
     (catch Throwable e
-      (when (or (instance? org.apache.zookeeper.KeeperException$ConnectionLossException e)
-                (instance? org.apache.zookeeper.KeeperException$SessionExpiredException e))
+      (when (restartable-exceptions (type e)) 
         (taoensso.timbre/info e "Virtual Peer encountered restartable exception. Restarting.")
         (>!! restart-ch :restart))
       (taoensso.timbre/info e))
