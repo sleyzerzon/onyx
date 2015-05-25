@@ -314,7 +314,7 @@
            (let [tail (last (get-in @(:onyx.core/state event) [:timeout-pool]))]
              (doseq [m tail]
                (when (p-ext/pending? event m)
-                 (taoensso.timbre/trace (format "Input retry message %s" m))
+                 (taoensso.timbre/error (ex-info (format "Input retry message %s" m) {:message m}))
                  (p-ext/retry-message event m)))
              (swap! (:onyx.core/state event) update-in [:timeout-pool] rsc/expire-bucket)
              (recur))))))))
