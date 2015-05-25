@@ -395,7 +395,7 @@
     ; The state machine decides who gets to connect to ensure only one thread
     ; will connect, and the remaining will write out to the pending channel
     (when (state->connecting state)
-      (future
+      @(future
         (if-let [opened-channel (create-client (:client-group messenger) 
                                                (:netty/external-addr site) 
                                                (:netty/port site))] 
