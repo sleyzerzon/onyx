@@ -3,7 +3,7 @@
   :url "https://github.com/onyx-platform/onyx"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :jvm-opts ["-Xmx4g"]
+  :jvm-opts ["-Xmx4g" "-XX:+UseG1GC"]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [org.apache.curator/curator-framework "2.8.0"] 
@@ -29,7 +29,7 @@
                                   [yeller-timbre-appender "0.4.1"]]
                    :plugins [[lein-midje "3.1.1"]
                              [codox "0.8.8"]]}
-             :circle-ci {:jvm-opts ["-Xmx3g"]}}
+             :circle-ci {:jvm-opts ["-Xmx3g" "-XX:+UseG1GC"]}}
   :codox {:output-dir "doc/api"})
 
 
