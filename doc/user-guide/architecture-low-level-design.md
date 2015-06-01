@@ -67,15 +67,15 @@ Peers begin with the empty state value, and local state. Local state maintains a
 
 Each virtual peer starts a thread that listens for additions to the log. When the log gets a new entry, the peer calls `onyx.extensions/apply-log-entry`. This is a function that takes a log entry and the replica, and returns a new replica with the log entry applied to it. This is a value-to-value transformation.
 
-<img src="/doc/design/images/diagram-1.png" height="75%" width="75%">
+<img src="../design/images/diagram-1.png" height="75%" width="75%">
 
 *A single peer begins with the empty replica (`{}`) and progressively applies log entries to the replica, advancing its state from one immutable value to the next.*
 
-<img src="/doc/design/images/diagram-2.png" height="65%" width="65%">
+<img src="../design/images/diagram-2.png" height="65%" width="65%">
 
 *A peer reads the first log entry and applies the function to its local replica, moving the replica into a state "as of" entry 0*
 
-<img src="/doc/design/images/diagram-4.png" height="65%" width="65%">
+<img src="../design/images/diagram-4.png" height="65%" width="65%">
 
 *Because application of functions from the log against the replica are deterministic and free of side effects, peers do not need to coordinate about the speed that each plays the log. Peers read the log on completely independent timelines*
 
@@ -83,7 +83,7 @@ Peers effect change in the world by reacting to log entries. When a log entry is
 
 Next, the peer calls `onyx.extensions/reactions` on the old/new replicas, the diff, and its local state. The peer can decide to submit new entries back to the log as a reaction to the log entry it just saw. It might react to "submit-job" with "volunteer-for-task", for instance.
 
-<img src="/doc/design/images/diagram-5.png" height="85%" width="85%">
+<img src="../design/images/diagram-5.png" height="85%" width="85%">
 
 *After a peer reads a log entry and applies it to the log replica, it will (deterministically!) react by appending zero or more log entries to the tail of the log.*
 
@@ -103,7 +103,7 @@ The technique needs peers to play by the following rules:
   - As a peer joining the cluster begins playing the log, it must buffer all reactive messages unless otherwise specified. The buffered messages are flushed after the peer has fully joined the cluster. This is because a peer could volunteer to perform work, but later abort its attempt to join the cluster, and therefore not be able to carry out any work.
   - A peer picks another peer to watch by determining a candidate list of peers it can stitch into. This candidate list is sorted by peer ID. The target peer is chosen by taking the message id modulo the number of peers in the sorted candidate list. The peer chosen can't be random because all peers will play the message to select a peer to stitch with, and they must all determine the same peer. Hence, the message modulo piece is a sort of "random seed" trick.
 
-<img src="/doc/design/images/diagram-7.png" height="85%" width="85%">
+<img src="../design/images/diagram-7.png" height="85%" width="85%">
 
 *At monotonic clock value t = 42, the replica has the above `:pairs` key, indicates who watches whom. As nodes are added, they maintain a ring formation so that every peer is watched by another.*
 
@@ -136,31 +136,31 @@ The algorithm works as follows:
   - S flushes its outbox of commands
   - T drops its watch from W - it is now redundant, as S is watching W
 
-<img src="/doc/design/images/diagram-13.png" height="85%" width="85%">
+<img src="../design/images/diagram-13.png" height="85%" width="85%">
 
 *Peers 1 - 4 form a ring. Peer 5 wants to join. Continued below...*
 
-<img src="/doc/design/images/diagram-14.png" height="85%" width="85%">
+<img src="../design/images/diagram-14.png" height="85%" width="85%">
 
 *Peer 5 initiates the first phase of the join protocol. Peer 1 prepares to accept Peer 5 into the ring by adding a watch to it. Continued below...*
 
-<img src="/doc/design/images/diagram-15.png" height="85%" width="85%">
+<img src="../design/images/diagram-15.png" height="85%" width="85%">
 
 *Peer 5 initiates the second phase of the join protocol. Peer 5 notifies Peer 4 as a peer to watch. At this point, a stable "mini ring" has been stitched along the outside of the cluster. We note that the link between Peer 1 and 4 is extraneous. Continued below...*
 
-<img src="/doc/design/images/diagram-16.png" height="85%" width="85%">
+<img src="../design/images/diagram-16.png" height="85%" width="85%">
 
 *Peer 5 has been fully stitched into the cluster, and the ring is intact*
 
 #### Examples
 
-- [Example 1: 3 node cluster, 1 peer successfully joins](/doc/design/join-examples/example-1.md)
-- [Example 2: 3 node cluster, 2 peers successfully join](/doc/design/join-examples/example-2.md)
-- [Example 3: 2 node cluster, 1 peer successfully joins, 1 aborts](/doc/design/join-examples/example-3.md)
-- [Example 4: 1 node cluster, 1 peer successfully joins](/doc/design/join-examples/example-4.md)
-- [Example 5: 0 node cluster, 1 peer successfully joins](/doc/design/join-examples/example-5.md)
-- [Example 6: 3 node cluster, 1 peer fails to join due to 1 peer dying during 3-phase join](/doc/design/join-examples/example-6.md)
-- [Example 7: 3 node cluster, 1 peer dies while joining](/doc/design/join-examples/example-7.md)
+- [Example 1: 3 node cluster, 1 peer successfully joins](../design/join-examples/example-1.md)
+- [Example 2: 3 node cluster, 2 peers successfully join](../design/join-examples/example-2.md)
+- [Example 3: 2 node cluster, 1 peer successfully joins, 1 aborts](../design/join-examples/example-3.md)
+- [Example 4: 1 node cluster, 1 peer successfully joins](../design/join-examples/example-4.md)
+- [Example 5: 0 node cluster, 1 peer successfully joins](../design/join-examples/example-5.md)
+- [Example 6: 3 node cluster, 1 peer fails to join due to 1 peer dying during 3-phase join](../design/join-examples/example-6.md)
+- [Example 7: 3 node cluster, 1 peer dies while joining](../design/join-examples/example-7.md)
 
 ### Dead peer removal
 
@@ -173,30 +173,30 @@ Peers will fail, or be shut down purposefully. Onyx needs to:
 
 In a cluster of > 1 peer, when a peer dies another peer will have a watch registered on its znode to detect the ephemeral disconnect. When a peer fails (peer F), the peer watching the failed peer (peer W) needs to inform the cluster about the failure, *and* go watch the node that the failed node was watching (peer Z). The joining strategy that has been outlined forces peers to form a ring. A ring structure has an advantage because there is no coordination or contention as to who must now watch peer Z for failure. Peer W is responsible for watching Z, because W *was* watching F, and F *was* watching Z. Therefore, W transitively closes the ring, and W watches Z. All replicas can deterministically compute this answer without conferring with each other.
 
-<img src="/doc/design/images/diagram-8.png" height="55%" width="55%">
+<img src="../design/images/diagram-8.png" height="55%" width="55%">
 
 *The nodes form a typical ring pattern. Peer 5 dies, and its connection with ZooKeeper is severed. Peer 1 reacts by reporting Peer 5's death to the log. Continued below...*
 
-<img src="/doc/design/images/diagram-9.png" height="85%" width="85%">
+<img src="../design/images/diagram-9.png" height="85%" width="85%">
 
 *At t = 45, all of the replicas realize that Peer 5 is dead, and that Peer 1 is responsible for closing the gap by now watching Peer 4 to maintain the ring.*
 
-<img src="/doc/design/images/diagram-10.png" height="85%" width="85%">
+<img src="../design/images/diagram-10.png" height="85%" width="85%">
 
 *One edge case of this design is the simultaneous death of two or more consecutive peers in the ring. Suppose Peers 4 and 5 die at the exact same time. Peer 1 will signal Peer 5's death, but Peer 5 never got the chance to signal Peer 4's death. Continued below...*
 
-<img src="/doc/design/images/diagram-11.png" height="85%" width="85%">
+<img src="../design/images/diagram-11.png" height="85%" width="85%">
 
 *Peer 1 signals Peer 5's death, and closes to the ring by adding a watch to Peer 4. Peer 4 is dead, but no one yet knows that. We circumvent this problem by first determining whether a peer is dead or not before adding a watch to it. If it's dead, as is Peer 4 in this case, we report it and further close the ring. Continued below...*
 
-<img src="/doc/design/images/diagram-12.png" height="85%" width="85%">
+<img src="../design/images/diagram-12.png" height="85%" width="85%">
 
 *Peer 1 signals peer 4's death, and further closes to the ring by adding a watch to Peer 3. The ring is now fully intact.*
 
 #### Examples
 
-- [Example 1: 4 node cluster, 1 peer crashes](/doc/design/leave-examples/example-1.md)
-- [Example 2: 4 node cluster, 2 peers instantaneously crash](/doc/design/leave-examples/example-2.md)
+- [Example 1: 4 node cluster, 1 peer crashes](../design/leave-examples/example-1.md)
+- [Example 2: 4 node cluster, 2 peers instantaneously crash](../design/leave-examples/example-2.md)
 
 ### Messaging
 
@@ -239,7 +239,7 @@ When the garbage collector is invoked, two things will happen. The caller of gc 
 
 The garbage collector can be invoked by the public API function `onyx.api/gc`. Upon returning, the log will be trimmed, and the in memory replicas will be compressed.
 
-<img src="/doc/design/images/diagram-17.png" height="85%" width="85%">
+<img src="../design/images/diagram-17.png" height="85%" width="85%">
 
 *A peer can start by reading out of the origin, and continue directly to a particular log location.*
 
