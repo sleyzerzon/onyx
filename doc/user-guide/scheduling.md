@@ -176,4 +176,4 @@ If a peer fails, or is otherwise removed from the cluster, the Task scheduler re
 
 #### Examples
 
-- [Example 1: 3 node cluster, 1 job, Greedy job scheduler, Balanced task scheduler](/doc/design/allocate-examples/example-1.md)
+- [Example 1: 3 node cluster, 1 job, Greedy job scheduler, Balanced task scheduler](../design/allocate-examples/example-1.md)
