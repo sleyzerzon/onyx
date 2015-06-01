@@ -1,3 +1,4 @@
+site_name: "Onyx"
 pages:
   - User Guide:
     - "What does Onyx offer?": "doc/user-guide/what-does-it-offer.md"
