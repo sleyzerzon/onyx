@@ -1,6 +1,6 @@
 site_name: "Onyx"
 pages:
-  - Docs:
+  - "docs":
     - User Guide:
       - "What does Onyx offer?": "doc/user-guide/what-does-it-offer.md"
       - "Concepts": "doc/user-guide/concepts.md"
