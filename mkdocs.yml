@@ -1,6 +1,7 @@
 site_name: "Onyx"
+docs_dir: "doc/user-guide"
 pages:
-  - "doc":
+  - User Guide:
     - "What does Onyx offer?": "user-guide/what-does-it-offer.md"
     - "Concepts": "user-guide/concepts.md"
     - "Onyx's Architecture and Low Level Design": "user-guide/architecture-low-level-design.md"
