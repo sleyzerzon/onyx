@@ -304,7 +304,7 @@
             {:shutdown-fn shutdown-fn})))
 
 (defn flush-pending 
-  "Flush all pending bufs. Run after when the channel is established."
+  "Flush all pending bufs. Run after the channel is established."
   [^Channel channel pending-ch]
   (close! pending-ch)
   (loop []
@@ -316,6 +316,7 @@
 (defprotocol IConnectionManager
   (connect [_])
   (write [connection buf])
+  (backpressure? [this])
   (reset-connection [_])
   (enqueue-pending [_ buf])
   (close [_]))
@@ -327,11 +328,12 @@
   (failed [this])
   (connected [this]))
 
-(defn add-failed-check 
+(defn add-future-listener 
   "Check if the message failed to send"
   [^ChannelFuture f connection buf]
   (.addListener f (reify GenericFutureListener
                     (operationComplete [_ _]
+                      (swap! (:incomplete-count connection) dec)
                       (when-not (.isSuccess f)
                         (timbre/trace (ex-info "Message failed to send" {:cause (.cause f)}))
                         (reset-connection connection))))))
@@ -356,7 +358,7 @@
 (defn state->connected [state]
   (compare-and-set! state :connecting :connected))
 
-(defrecord ConnectionManager [messenger site state pending-ch channel]
+(defrecord ConnectionManager [messenger site state pending-ch channel incomplete-count]
   IConnectionManager
   (reset-connection [connection]
     (when (state->reset state)
@@ -381,8 +383,12 @@
     (let [channel-val ^Channel @channel] 
       (if (and channel-val (.isActive channel-val))
         (let [fut (.writeAndFlush channel-val ^ByteBuf buf)] 
-          (add-failed-check fut connection ^ByteBuf buf)) 
+          (swap! incomplete-count inc)
+          (add-future-listener fut connection ^ByteBuf buf)) 
         (enqueue-pending connection buf))))
+
+  (backpressure? [_]
+    (>= (count @incomplete-count) 10))
 
   (close [_] 
     (let [cval @channel] (if cval (.close ^Channel cval)))
@@ -412,7 +418,8 @@
                          site
                          (atom :initializing) 
                          (atom (make-pending-chan messenger))
-                         (atom nil))
+                         (atom nil)
+                         (atom 0))
     connect))
 
 (defmethod extensions/receive-messages NettyTcpSockets
