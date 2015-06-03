@@ -199,22 +199,21 @@
     (merge event rets)))
 
 (defn tag-messages [event]
-  (merge
-   event
-   (when (= (:onyx/type (:onyx.core/task-map event)) :input)
-     (let [{:keys [onyx.core/id onyx.core/max-acker-links]} event
-           peers (get (:ackers @(:onyx.core/replica event)) (:onyx.core/job-id event))
-           candidates (operation/select-n-peers id peers max-acker-links)] 
-       (when-not (seq peers)
-         (do (warn (format "[%s] This job no longer has peers capable of acking. This job will now pause execution." (:onyx.core/id event)))
-             (throw (ex-info "Not enough acker peers" {:peers peers}))))
-       (update-in
-         event
-         [:onyx.core/batch]
-         (fn [batch]
-           (map (comp (partial add-completion-id id)
-                      (partial add-acker-id candidates))
-                batch)))))))
+  (if (= (:onyx/type (:onyx.core/task-map event)) :input)
+    (let [{:keys [onyx.core/id onyx.core/max-acker-links]} event
+          peers (get (:ackers @(:onyx.core/replica event)) (:onyx.core/job-id event))
+          candidates (operation/select-n-peers id peers max-acker-links)] 
+      (when-not (seq peers)
+        (do (warn (format "[%s] This job no longer has peers capable of acking. This job will now pause execution." (:onyx.core/id event)))
+            (throw (ex-info "Not enough acker peers" {:peers peers}))))
+      (update-in
+        event
+        [:onyx.core/batch]
+        (fn [batch]
+          (map (comp (partial add-completion-id id)
+                     (partial add-acker-id candidates))
+               batch))))
+    event))
 
 (defn add-messages-to-timeout-pool [{:keys [onyx.core/state] :as event}]
   (when (= (:onyx/type (:onyx.core/task-map event)) :input)
