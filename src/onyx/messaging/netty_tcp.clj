@@ -316,7 +316,7 @@
 (defprotocol IConnectionManager
   (connect [_])
   (write [connection buf])
-  (backpressure? [this])
+  (backpressure? [connection])
   (reset-connection [_])
   (enqueue-pending [_ buf])
   (close [_]))
@@ -328,15 +328,19 @@
   (failed [this])
   (connected [this]))
 
-(defn add-future-listener 
+(defn add-backpressure-fail-handling 
   "Check if the message failed to send"
   [^ChannelFuture f connection buf]
-  (.addListener f (reify GenericFutureListener
-                    (operationComplete [_ _]
-                      (swap! (:incomplete-count connection) dec)
-                      (when-not (.isSuccess f)
-                        (timbre/trace (ex-info "Message failed to send" {:cause (.cause f)}))
-                        (reset-connection connection))))))
+  (let [buf-size (.writerIndex buf)]
+    (swap! (:incomplete-bytes connection) + buf-size)
+    (.addListener f (reify GenericFutureListener
+                      (operationComplete [_ _]
+                        (swap! (:incomplete-bytes connection) - buf-size)
+                        (when-not (.isSuccess f)
+                          ;; Investigate whether multiple failures should be accepted
+                          ;; before connection reset
+                          (timbre/trace (ex-info "Message failed to send" {:cause (.cause f)}))
+                          (reset-connection connection)))))))
 
 (defn make-pending-chan [messenger]
   (chan (sliding-buffer (:pending-buffer-size messenger))))
@@ -358,7 +362,7 @@
 (defn state->connected [state]
   (compare-and-set! state :connecting :connected))
 
-(defrecord ConnectionManager [messenger site state pending-ch channel incomplete-count]
+(defrecord ConnectionManager [messenger site state pending-ch channel incomplete-bytes]
   IConnectionManager
   (reset-connection [connection]
     (when (state->reset state)
@@ -383,12 +387,11 @@
     (let [channel-val ^Channel @channel] 
       (if (and channel-val (.isActive channel-val))
         (let [fut (.writeAndFlush channel-val ^ByteBuf buf)] 
-          (swap! incomplete-count inc)
-          (add-future-listener fut connection ^ByteBuf buf)) 
+          (add-backpressure-fail-handling fut connection ^ByteBuf buf)) 
         (enqueue-pending connection buf))))
 
   (backpressure? [_]
-    (>= @incomplete-count 1))
+    (>= @incomplete-bytes 100000))
 
   (close [_] 
     (let [cval @channel] (if cval (.close ^Channel cval)))
