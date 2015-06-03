@@ -5,7 +5,7 @@
               [rotating-seq.core :as rsc]
               [onyx.log.commands.common :as common]
               [onyx.log.entry :as entry]
-              [onyx.static.planning :refer [find-task find-task-fast build-pred-fn]]
+              [onyx.static.planning :refer [find-task build-pred-fn]]
               [onyx.messaging.acking-daemon :as acker]
               [onyx.peer.pipeline-extensions :as p-ext]
               [onyx.peer.function :as function]
@@ -91,12 +91,11 @@
       (throw (:message leaf)))
     (choose-output-paths event compiled-norm-fcs result leaf serialized-task downstream)))
 
-(defn group-message [segment catalog task]
-  (let [t (find-task-fast catalog task)]
-    (if-let [k (:onyx/group-by-key t)]
-      (hash (get segment k))
-      (when-let [f (:onyx/group-by-fn t)]
-        (hash ((operation/resolve-fn {:onyx/fn f}) segment))))))
+(defn group-message [segment {:keys [onyx.core/task->group-by-key onyx.core/task->group-by-fn]} task]
+  (if-let [k (task->group-by-key task)]
+    (hash (get segment k))
+    (if-let [f (task->group-by-fn task)]
+      (hash (f segment)))))
 
 (defn group-segments [leaf next-tasks catalog event]
   (let [post-transformation (:post-transformation (:routes leaf))
@@ -109,7 +108,7 @@
     (-> leaf 
         (assoc :message (reduce dissoc msg (:exclusions (:routes leaf))))
         (assoc :hash-group (reduce (fn [groups t]
-                                     (assoc groups t (group-message msg catalog t)))
+                                     (assoc groups t (group-message msg event t)))
                                    {} 
                                    next-tasks)))))
 
@@ -504,6 +503,12 @@
                            :onyx.core/compiled-after-task-fn (compile-after-task-functions lifecycles (:name task))
                            :onyx.core/compiled-norm-fcs (compile-fc-norms flow-conditions (:name task))
                            :onyx.core/compiled-ex-fcs (compile-fc-exs flow-conditions (:name task))
+                           :onyx.core/task->group-by-key (into {} (map (juxt :onyx/name :onyx/group-by-key) catalog))
+                           :onyx.core/task->group-by-fn (->> (filter :onyx/group-by-fn catalog)
+                                                             (map (fn [entry]
+                                                                    [(:onyx/name entry)
+                                                                     (operation/resolve-fn {:onyx/fn (:onyx/group-by-fn entry)})]))
+                                                             (into {}))
                            :onyx.core/task-map catalog-entry
                            :onyx.core/serialized-task task
                            :onyx.core/params (resolve-calling-params catalog-entry opts)
