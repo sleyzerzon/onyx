@@ -93,7 +93,7 @@
 
 (defn group-message [segment {:keys [onyx.core/task->group-by-key onyx.core/task->group-by-fn]} task]
   (if-let [k (task->group-by-key task)]
-    (hash (get segment k))
+      (hash (get segment k))
     (if-let [f (task->group-by-fn task)]
       (hash (f segment)))))
 
@@ -465,6 +465,26 @@
     (throw (ex-info "Pending timeout cannot be greater than acking daemon timeout"
                     {:opts opts :pending-timeout pending-timeout}))))
 
+(defn compile-group-by-key-lookup [catalog egress-ids]
+  (->> catalog
+       (filter (fn [entry] 
+                 (and (:onyx/group-by-key entry)
+                      egress-ids
+                      (egress-ids (:onyx/name entry)))))
+       (map (juxt :onyx/name :onyx/group-by-key))
+       (into {})))
+
+(defn compile-group-by-fn-lookup [catalog egress-ids]
+  (->> catalog 
+       (filter (fn [entry] 
+                 (and (:onyx/group-by-fn entry)
+                      egress-ids
+                      (egress-ids (:onyx/name entry)))))
+       (map (fn [entry]
+              [(:onyx/name entry)
+               (operation/resolve-fn {:onyx/fn (:onyx/group-by-fn entry)})]))
+       (into {})))
+
 (defrecord TaskLifeCycle
     [id log messenger-buffer messenger job-id task-id replica restart-ch
      kill-ch outbox-ch seal-resp-ch completion-ch opts task-kill-ch]
@@ -503,12 +523,8 @@
                            :onyx.core/compiled-after-task-fn (compile-after-task-functions lifecycles (:name task))
                            :onyx.core/compiled-norm-fcs (compile-fc-norms flow-conditions (:name task))
                            :onyx.core/compiled-ex-fcs (compile-fc-exs flow-conditions (:name task))
-                           :onyx.core/task->group-by-key (into {} (map (juxt :onyx/name :onyx/group-by-key) catalog))
-                           :onyx.core/task->group-by-fn (->> (filter :onyx/group-by-fn catalog)
-                                                             (map (fn [entry]
-                                                                    [(:onyx/name entry)
-                                                                     (operation/resolve-fn {:onyx/fn (:onyx/group-by-fn entry)})]))
-                                                             (into {}))
+                           :onyx.core/task->group-by-key (compile-group-by-key-lookup catalog (:egress-ids task))
+                           :onyx.core/task->group-by-fn (compile-group-by-fn-lookup catalog (:egress-ids task))
                            :onyx.core/task-map catalog-entry
                            :onyx.core/serialized-task task
                            :onyx.core/params (resolve-calling-params catalog-entry opts)
