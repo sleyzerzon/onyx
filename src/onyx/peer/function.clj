@@ -82,5 +82,6 @@
                 target (pick-peer id active-peers hash-group max-downstream-links)]
             (when target
               (let [link (operation/peer-link event target)]
+                ;(onyx.extensions/backpressure? messenger event link)
                 (onyx.extensions/send-messages messenger event link segs)))))
         {}))))

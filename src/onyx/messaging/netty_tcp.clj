@@ -388,7 +388,7 @@
         (enqueue-pending connection buf))))
 
   (backpressure? [_]
-    (>= (count @incomplete-count) 10))
+    (>= @incomplete-count 1))
 
   (close [_] 
     (let [cval @channel] (if cval (.close ^Channel cval)))
@@ -421,6 +421,10 @@
                          (atom nil)
                          (atom 0))
     connect))
+
+(defmethod extensions/backpressure? NettyTcpSockets
+  [messenger event peer-link]
+  (backpressure? peer-link))
 
 (defmethod extensions/receive-messages NettyTcpSockets
   [messenger {:keys [onyx.core/task-map] :as event}]

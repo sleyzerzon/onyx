@@ -61,8 +61,13 @@
 
 (defmulti internal-retry-message (fn [messenger event id peer-link] (type messenger)))
 
+(defmulti backpressure? (fn [messenger event peer-link] (type messenger)))
+
 (defmethod open-peer-site :default
   [_ _] "localhost")
 
 (defmethod get-peer-site :default
   [_ _] "localhost")
+
+(defmethod backpressure? :default
+  [_ _] false)
