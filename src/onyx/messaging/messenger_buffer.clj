@@ -10,8 +10,8 @@
   (start [component]
     (taoensso.timbre/info "Starting Messenger Buffer")
 
-    (let [inbound-ch (chan (sliding-buffer (or (:onyx.messaging/inbound-buffer-size opts) 
-                                               (:onyx.messaging/inbound-buffer-size defaults))))]
+    (let [inbound-ch (chan (or (:onyx.messaging/inbound-buffer-size opts) 
+                               (:onyx.messaging/inbound-buffer-size defaults)))]
       (assoc component :inbound-ch inbound-ch)))
 
   (stop [component]
