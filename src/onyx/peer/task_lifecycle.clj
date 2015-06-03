@@ -230,11 +230,13 @@
 
 (defn strip-sentinel
   [event]
-  (update-in event
-             [:onyx.core/batch]
-             (fn [batch]
-               (remove (fn [v] (= :done (:message v)))
-                       batch))))
+  (if (= (:onyx/type (:onyx.core/task-map event)) :input)
+    (update-in event
+               [:onyx.core/batch]
+               (fn [batch]
+                 (remove (fn [v] (= :done (:message v)))
+                         batch)))
+    event))
 
 (defn collect-next-segments [event input]
   (let [segments (try (function/apply-fn event input) (catch Throwable e e))]
