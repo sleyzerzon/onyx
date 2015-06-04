@@ -65,7 +65,7 @@
 (defn choose-output-paths
   [event compiled-flow-conditions result leaf serialized-task downstream]
   (if (empty? compiled-flow-conditions)
-    {:flow downstream}
+    (->Route downstream nil nil nil)
     (reduce
       (fn [{:keys [flow exclusions] :as all} entry]
         (if ((:flow/predicate entry) [event (:message (:root result)) (:message leaf) (map :message (:leaves result))])
@@ -174,15 +174,18 @@
         (extensions/internal-ack-messages (:onyx.core/messenger event) event link acks))))
   event)
 
-(defn flow-retry-messages [{:keys [onyx.core/results] :as event}]
-  (doseq [result results]
-    (when (seq (filter (fn [leaf] (= :retry (:action (:routes leaf)))) (:leaves result)))
-      (let [link (operation/peer-link event (:completion-id (:root result)))]
-        (extensions/internal-retry-message
-          (:onyx.core/messenger event)
-          event
-          (:id (:root result))
-          link))))
+(defn flow-retry-messages [{:keys [onyx.core/results
+                                   onyx.core/compiled-norm-fcs 
+                                   onyx.core/compiled-ex-fcs] :as event}]
+  (when-not (and (empty? compiled-ex-fcs) (empty? compiled-norm-fcs)) 
+    (doseq [result results]
+      (when (seq (filter (fn [leaf] (= :retry (:action (:routes leaf)))) (:leaves result)))
+        (let [link (operation/peer-link event (:completion-id (:root result)))]
+          (extensions/internal-retry-message
+            (:onyx.core/messenger event)
+            event
+            (:id (:root result))
+            link)))))
   event)
 
 (defn inject-batch-resources [event]
