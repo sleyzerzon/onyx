@@ -145,31 +145,33 @@
 (defn gen-ack-fusion-vals 
   "Prefuses acks to reduce packet size"
   [task-map leaves]
-  (if-not (= (:onyx/type task-map) :output)
-    (reduce (fn [fused-ack leaf]
-              (if (ack-routes? (:routes leaf))
-                (reduce bit-xor fused-ack (:ack-vals leaf))
-                fused-ack)) 
-            0
-            leaves)
-    0))
+  (reduce (fn [fused-ack leaf]
+            (if (ack-routes? (:routes leaf))
+              (reduce bit-xor fused-ack (:ack-vals leaf))
+              fused-ack)) 
+          0
+          leaves))
 
 (defn ack-messages [{:keys [onyx.core/results onyx.core/task-map] :as event}]
-  (doseq [[acker-id results-by-acker] (group-by (comp :acker-id :root) results)]
-    (let [link (operation/peer-link event acker-id)
-          acks (doall 
-                 (map (fn [result] (let [fused-leaf-vals (gen-ack-fusion-vals task-map (:leaves result))
-                                         fused-vals (if-let [ack-val (:ack-val (:root result))] 
-                                                      (bit-xor fused-leaf-vals ack-val)
-                                                      fused-leaf-vals)]
-                                     (->Ack (:id (:root result))
-                                            (:completion-id (:root result))
-                                            ;; or'ing by zero covers the case of flow conditions where an
-                                            ;; input task produces a segment that goes nowhere.
-                                            (or fused-vals 0)
-                                            (System/currentTimeMillis))))
-                      results-by-acker))] 
-      (extensions/internal-ack-messages (:onyx.core/messenger event) event link acks)))
+  (let [output-task? (= (:onyx/type task-map) :output)] 
+    (doseq [[acker-id results-by-acker] (group-by (comp :acker-id :root) results)]
+      (let [link (operation/peer-link event acker-id)
+            acks (doall 
+                   (map (fn [result] 
+                          (let [fused-leaf-vals (if output-task? 
+                                                  0
+                                                  (gen-ack-fusion-vals task-map (:leaves result)))
+                                fused-vals (if-let [ack-val (:ack-val (:root result))] 
+                                             (bit-xor fused-leaf-vals ack-val)
+                                             fused-leaf-vals)]
+                            (->Ack (:id (:root result))
+                                   (:completion-id (:root result))
+                                   ;; or'ing by zero covers the case of flow conditions where an
+                                   ;; input task produces a segment that goes nowhere.
+                                   (or fused-vals 0)
+                                   (System/currentTimeMillis))))
+                        results-by-acker))] 
+        (extensions/internal-ack-messages (:onyx.core/messenger event) event link acks))))
   event)
 
 (defn flow-retry-messages [{:keys [onyx.core/results] :as event}]
