@@ -37,6 +37,7 @@
 (def ^:const acks-base-length (int 4))
 ; id uuid, completion-id uuid, ack-val long
 (def ^:const ack-base-length (int 40))
+(def ^:const acks-header-length (int (+ acks-base-length type-header-length)))
 
 ; message length without nippy segments
 ; id (uuid), acker-id (uuid), completion-id (uuid), ack-val (long)
@@ -48,6 +49,7 @@
 (def ^:const completion-payload-length (int (+ completion-msg-length type-header-length)))
 
 (def ^:const retry-payload-length (int (+ retry-msg-length type-header-length)))
+
 
 (defn build-completion-msg-buf [id] 
   (let [buf ^ByteBuf (byte-buffer completion-payload-length)] 
@@ -71,9 +73,7 @@
 
 (defn build-acks-msg-buf [acks] 
   (let [cnt (count acks)
-        ^ByteBuf buf (byte-buffer (+ acks-base-length 
-                                     type-header-length 
-                                     (* cnt ack-base-length)))] 
+        ^ByteBuf buf (byte-buffer (+ acks-base-length (* cnt ack-base-length)))] 
     (.writeByte buf ack-type-id)
     (.writeInt buf (int cnt))
     (doseq [ack acks]
