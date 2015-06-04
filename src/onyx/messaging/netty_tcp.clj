@@ -330,7 +330,7 @@
 
 (defn add-backpressure-fail-handling 
   "Check if the message failed to send"
-  [^ChannelFuture f connection buf]
+  [^ChannelFuture f connection ^ByteBuf buf]
   (let [buf-size (.writerIndex buf)]
     (swap! (:incomplete-bytes connection) + buf-size)
     (.addListener f (reify GenericFutureListener
