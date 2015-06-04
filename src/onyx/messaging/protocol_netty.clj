@@ -70,11 +70,12 @@
    :id (take-uuid buf)})
 
 (defn build-acks-msg-buf [acks] 
-  (let [^ByteBuf buf (byte-buffer (+ acks-base-length 
+  (let [cnt (count acks)
+        ^ByteBuf buf (byte-buffer (+ acks-base-length 
                                      type-header-length 
-                                     (* (count acks) ack-base-length)))] 
+                                     (* cnt ack-base-length)))] 
     (.writeByte buf ack-type-id)
-    (.writeInt buf (int (count acks)))
+    (.writeInt buf (int cnt))
     (doseq [ack acks]
       (write-uuid buf (:id ack))
       (write-uuid buf (:completion-id ack))
