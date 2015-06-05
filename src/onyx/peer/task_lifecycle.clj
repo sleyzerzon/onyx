@@ -91,14 +91,9 @@
       (throw (:message leaf)))
     (choose-output-paths event compiled-norm-fcs result leaf serialized-task downstream)))
 
-(defn group-message [segment {:keys [onyx.core/task->group-by-key onyx.core/task->group-by-fn]} task]
-  (if-let [k (task->group-by-key task)]
-      (hash (get segment k))
-    (if-let [f (task->group-by-fn task)]
-      (hash (f segment)))))
-
 (defn group-segments [leaf next-tasks catalog event]
-  (let [post-transformation (:post-transformation (:routes leaf))
+  (let [task->group-by-fn (:onyx.core/task->group-by-fn event)
+        post-transformation (:post-transformation (:routes leaf))
         message (:message leaf)
         msg (if (and (operation/exception? message) post-transformation)
               (operation/apply-function (operation/kw->fn post-transformation)
@@ -108,7 +103,9 @@
     (-> leaf 
         (assoc :message (reduce dissoc msg (:exclusions (:routes leaf))))
         (assoc :hash-group (reduce (fn [groups t]
-                                     (assoc groups t (group-message msg event t)))
+                                     (if-let [group-fn (task->group-by-fn t)]
+                                       (assoc groups t (hash (group-fn msg)))
+                                       groups))
                                    {} 
                                    next-tasks)))))
 
@@ -407,7 +404,7 @@
         (let [t (System/currentTimeMillis)
               snapshot @state
               to-remove (map first 
-                             (filter (fn [[k v]] (>= (- t (:timestamp v)) idle)) 
+                             (filter (fn [[k v]] (>= (- t @(:timestamp v)) idle)) 
                                      (:links snapshot)))]
           (doseq [k to-remove]
             (swap! state dissoc k)
@@ -471,25 +468,31 @@
     (throw (ex-info "Pending timeout cannot be greater than acking daemon timeout"
                     {:opts opts :pending-timeout pending-timeout}))))
 
-(defn compile-group-by-key-lookup [catalog egress-ids]
-  (->> catalog
-       (filter (fn [entry] 
-                 (and (:onyx/group-by-key entry)
-                      egress-ids
-                      (egress-ids (:onyx/name entry)))))
-       (map (juxt :onyx/name :onyx/group-by-key))
-       (into {})))
-
-(defn compile-group-by-fn-lookup [catalog egress-ids]
-  (->> catalog 
-       (filter (fn [entry] 
-                 (and (:onyx/group-by-fn entry)
-                      egress-ids
-                      (egress-ids (:onyx/name entry)))))
-       (map (fn [entry]
-              [(:onyx/name entry)
-               (operation/resolve-fn {:onyx/fn (:onyx/group-by-fn entry)})]))
-       (into {})))
+(defn compile-grouping-fn 
+  "Compiles grouping outgoing grouping task info into a task->group-fn map
+  for quick lookup and group fn calls"
+  [catalog egress-ids]
+  (merge (->> catalog
+              (filter (fn [entry] 
+                        (and (:onyx/group-by-key entry)
+                             egress-ids
+                             (egress-ids (:onyx/name entry)))))
+              (map (fn [entry] 
+                     (let [group-key (:onyx/group-by-key entry)
+                           group-fn (if (keyword? group-key)
+                                      group-key
+                                      #(get % group-key))] 
+                       [(:onyx/name entry) group-fn])))
+              (into {}))
+         (->> catalog 
+              (filter (fn [entry] 
+                        (and (:onyx/group-by-fn entry)
+                             egress-ids
+                             (egress-ids (:onyx/name entry)))))
+              (map (fn [entry]
+                     [(:onyx/name entry)
+                      (operation/resolve-fn {:onyx/fn (:onyx/group-by-fn entry)})]))
+              (into {}))))
 
 (defrecord TaskLifeCycle
     [id log messenger-buffer messenger job-id task-id replica restart-ch
@@ -529,8 +532,7 @@
                            :onyx.core/compiled-after-task-fn (compile-after-task-functions lifecycles (:name task))
                            :onyx.core/compiled-norm-fcs (compile-fc-norms flow-conditions (:name task))
                            :onyx.core/compiled-ex-fcs (compile-fc-exs flow-conditions (:name task))
-                           :onyx.core/task->group-by-key (compile-group-by-key-lookup catalog (:egress-ids task))
-                           :onyx.core/task->group-by-fn (compile-group-by-fn-lookup catalog (:egress-ids task))
+                           :onyx.core/task->group-by-fn (compile-grouping-fn catalog (:egress-ids task))
                            :onyx.core/task-map catalog-entry
                            :onyx.core/serialized-task task
                            :onyx.core/params (resolve-calling-params catalog-entry opts)
