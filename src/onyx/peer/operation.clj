@@ -41,7 +41,7 @@
   [{:keys [onyx.core/state] :as event} peer-id]
   (if-let [link (get (:links @state) peer-id)]
     (do 
-      (swap! state assoc-in [:links peer-id] (assoc link :timestamp (System/currentTimeMillis)))
+      (reset! (:timestamp link) (System/currentTimeMillis))
       (:link link))
     (let [site (-> @(:onyx.core/replica event)
                    :peer-sites
@@ -52,7 +52,7 @@
                  (fn [link]
                    (or link 
                        (->Link (extensions/connect-to-peer (:onyx.core/messenger event) event site)
-                               (System/currentTimeMillis)))))
+                               (atom (System/currentTimeMillis))))))
           :links
           (get peer-id)
           :link))))
