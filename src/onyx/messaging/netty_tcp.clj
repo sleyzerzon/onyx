@@ -142,32 +142,30 @@
   "Given a core, a channel, and a message, applies the message to 
   core and writes a response back on this channel."
   [messenger inbound-ch release-ch retry-ch] 
-  (fn [^ChannelHandlerContext ctx ^ByteBuf buf]
-    (try 
-      (let [msg (protocol/read-buf (:decompress-f messenger) buf)]
-        (let [t ^byte (:type msg)]
+  (let [acking-daemon (:acking-daemon messenger)
+        decompress-f (:decompress-f messenger)] 
+    (fn [^ChannelHandlerContext ctx ^ByteBuf buf]
+      (try 
+        (let [t ^byte (protocol/read-msg-type buf)]
           (cond (= t protocol/messages-type-id) 
-                (doseq [message (:messages msg)]
+                (doseq [message (protocol/read-messages-buf decompress-f buf)]
                   (>!! inbound-ch message))
 
                 (= t protocol/ack-type-id)
-                (doseq [ack (:acks msg)]
-                  (acker/ack-message (:acking-daemon messenger)
+                (doseq [ack (protocol/read-acks-buf buf)]
+                  (acker/ack-message acking-daemon
                                      (:id ack)
                                      (:completion-id ack)
                                      (:ack-val ack)))
 
                 (= t protocol/completion-type-id)
-                (>!! release-ch (:id msg))
+                (>!! release-ch (protocol/read-completion-buf buf))
 
                 (= t protocol/retry-type-id)
-                (>!! retry-ch (:id msg))
-
-                :else
-                (throw (ex-info "Unexpected message received from Netty" {:message msg})))))
-      (catch Throwable e
-        (taoensso.timbre/error e)
-        (throw e)))))
+                (>!! retry-ch (protocol/read-retry-buf buf))))
+        (catch Throwable e
+          (taoensso.timbre/error e)
+          (throw e))))))
 
 (defn start-netty-server
   [boss-group worker-group host port messenger inbound-ch release-ch retry-ch]
@@ -391,7 +389,7 @@
         (enqueue-pending connection buf))))
 
   (backpressure? [_]
-    (>= @incomplete-bytes 100000))
+    (>= @incomplete-bytes 100000000))
 
   (close [_] 
     (let [cval @channel] (if cval (.close ^Channel cval)))
