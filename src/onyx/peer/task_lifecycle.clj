@@ -63,33 +63,36 @@
         :else (into (set all) to-add)))
 
 (defn choose-output-paths
-  [event compiled-flow-conditions result leaf serialized-task downstream]
-  (if (empty? compiled-flow-conditions)
-    (->Route downstream nil nil nil)
-    (reduce
-      (fn [{:keys [flow exclusions] :as all} entry]
-        (if ((:flow/predicate entry) [event (:message (:root result)) (:message leaf) (map :message (:leaves result))])
-          (if (:flow/short-circuit? entry)
-            (reduced (->Route (join-output-paths flow (:flow/to entry) downstream)
-                              (into (set exclusions) (:flow/exclude-keys entry))
-                              (:flow/post-transform entry)
-                              (:flow/action entry)))
-            (->Route (join-output-paths flow (:flow/to entry) downstream)
-                     (into (set exclusions) (:flow/exclude-keys entry))
-                     nil
-                     nil))
-          all))
-      (->Route #{} #{} nil nil)
-      compiled-flow-conditions)))
+  [event compiled-flow-conditions result leaf downstream]
+  (reduce
+    (fn [{:keys [flow exclusions] :as all} entry]
+      (if ((:flow/predicate entry) [event (:message (:root result)) (:message leaf) (map :message (:leaves result))])
+        (if (:flow/short-circuit? entry)
+          (reduced (->Route (join-output-paths flow (:flow/to entry) downstream)
+                            (into (set exclusions) (:flow/exclude-keys entry))
+                            (:flow/post-transform entry)
+                            (:flow/action entry)))
+          (->Route (join-output-paths flow (:flow/to entry) downstream)
+                   (into (set exclusions) (:flow/exclude-keys entry))
+                   nil
+                   nil))
+        all))
+    (->Route #{} #{} nil nil)
+    compiled-flow-conditions))
 
 (defn add-route-data
-  [{:keys [onyx.core/serialized-task onyx.core/compiled-norm-fcs onyx.core/compiled-ex-fcs]
-    :as event} result leaf downstream]
-  (if (operation/exception? (:message leaf))
-    (if (seq compiled-ex-fcs)
-      (choose-output-paths event compiled-ex-fcs result leaf serialized-task downstream)
-      (throw (:message leaf)))
-    (choose-output-paths event compiled-norm-fcs result leaf serialized-task downstream)))
+  [event result leaf downstream]
+  (if (nil? (:onyx.core/flow-conditions event))
+    (->Route downstream nil nil nil)
+    (let [compiled-ex-fcs (:onyx.core/compiled-ex-fcs event)]
+      (if (operation/exception? (:message leaf))
+        (if (seq compiled-ex-fcs)
+          (choose-output-paths event compiled-ex-fcs result leaf downstream)  
+          (throw (:message leaf)))
+        (let [compiled-norm-fcs (:onyx.core/compiled-norm-fcs event)]
+          (if (seq compiled-norm-fcs) 
+            (choose-output-paths event compiled-norm-fcs result leaf downstream)   
+            (->Route downstream nil nil nil)))))))
 
 (defn group-segments [leaf next-tasks catalog event]
   (let [task->group-by-fn (:onyx.core/task->group-by-fn event)
@@ -171,11 +174,9 @@
         (extensions/internal-ack-messages (:onyx.core/messenger event) event link acks))))
   event)
 
-(defn flow-retry-messages [{:keys [onyx.core/results
-                                   onyx.core/compiled-norm-fcs 
-                                   onyx.core/compiled-ex-fcs] :as event}]
-  (when-not (and (empty? compiled-ex-fcs) (empty? compiled-norm-fcs)) 
-    (doseq [result results]
+(defn flow-retry-messages [event]
+  (when-not (:onyx.core/flow-conditions event) 
+    (doseq [result (:onyx.core/results event)]
       (when (seq (filter (fn [leaf] (= :retry (:action (:routes leaf)))) (:leaves result)))
         (let [link (operation/peer-link event (:completion-id (:root result)))]
           (extensions/internal-retry-message
