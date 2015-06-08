@@ -314,7 +314,6 @@
 (defprotocol IConnectionManager
   (connect [_])
   (write [connection buf])
-  (backpressure? [connection])
   (reset-connection [_])
   (enqueue-pending [_ buf])
   (close [_]))
@@ -326,19 +325,16 @@
   (failed [this])
   (connected [this]))
 
-(defn add-backpressure-fail-handling 
+(defn add-fail-handling 
   "Check if the message failed to send"
-  [^ChannelFuture f connection ^ByteBuf buf]
-  (let [buf-size (.writerIndex buf)]
-    (swap! (:incomplete-bytes connection) + buf-size)
-    (.addListener f (reify GenericFutureListener
-                      (operationComplete [_ _]
-                        (swap! (:incomplete-bytes connection) - buf-size)
-                        (when-not (.isSuccess f)
-                          ;; Investigate whether multiple failures should be accepted
-                          ;; before connection reset
-                          (timbre/trace (ex-info "Message failed to send" {:cause (.cause f)}))
-                          (reset-connection connection)))))))
+  [^ChannelFuture f connection]
+  (.addListener f (reify GenericFutureListener
+                    (operationComplete [_ _]
+                      (when-not (.isSuccess f)
+                        ;; Investigate whether multiple failures should be accepted
+                        ;; before connection reset
+                        (timbre/trace (ex-info "Message failed to send" {:cause (.cause f)}))
+                        (reset-connection connection))))))
 
 (defn make-pending-chan [messenger]
   (chan (sliding-buffer (:pending-buffer-size messenger))))
@@ -385,11 +381,8 @@
     (let [channel-val ^Channel @channel] 
       (if (and channel-val (.isActive channel-val))
         (let [fut (.writeAndFlush channel-val ^ByteBuf buf)] 
-          (add-backpressure-fail-handling fut connection ^ByteBuf buf)) 
+          (add-fail-handling fut connection)) 
         (enqueue-pending connection buf))))
-
-  (backpressure? [_]
-    (>= @incomplete-bytes 100000000))
 
   (close [_] 
     (let [cval @channel] (if cval (.close ^Channel cval)))
@@ -422,10 +415,6 @@
                          (atom nil)
                          (atom 0))
     connect))
-
-(defmethod extensions/backpressure? NettyTcpSockets
-  [messenger event peer-link]
-  (backpressure? peer-link))
 
 (defmethod extensions/receive-messages NettyTcpSockets
   [messenger {:keys [onyx.core/task-map] :as event}]

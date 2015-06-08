@@ -73,17 +73,15 @@
         egress-tasks (:egress-ids (:onyx.core/serialized-task event))]
     (when-not (empty? leaves)
       (let [replica @(:onyx.core/replica event)
+            peer-state (:peer-state replica)
             segments (build-segments-to-send leaves)
             groups (group-by (juxt :route :hash-group) segments)
             allocations (get (:allocations replica) job-id)]
         (doseq [[[route hash-group] segs] groups]
           (let [peers (get allocations (get egress-tasks route))
-                active-peers (filter #(= (get-in replica [:peer-state %]) :active) peers)]
-            (loop [target (pick-peer id active-peers hash-group max-downstream-links)]
-              (when target
-                (let [link (operation/peer-link event target)]
-                  (if (onyx.extensions/backpressure? messenger event link)
-                    ;; re-pick, hopefully non backpressured peer
-                    (recur (pick-peer id active-peers hash-group max-downstream-links))
-                    (onyx.extensions/send-messages messenger event link segs)))))))
+                active-peers (filter #(= (get peer-state %) :active) peers)
+                target (pick-peer id active-peers hash-group max-downstream-links)]
+            (when target
+              (let [link (operation/peer-link event target)]
+                (onyx.extensions/send-messages messenger event link segs)))))
         {}))))

@@ -103,14 +103,18 @@
                                         [event] 
                                         message)
               message)]
-    (-> leaf 
-        (assoc :message (reduce dissoc msg (:exclusions (:routes leaf))))
-        (assoc :hash-group (reduce (fn [groups t]
-                                     (if-let [group-fn (task->group-by-fn t)]
-                                       (assoc groups t (hash (group-fn msg)))
-                                       groups))
-                                   {} 
-                                   next-tasks)))))
+    (cond-> leaf 
+      ;; TODO, move exclusions into a lifecycle call which can be stripped out
+      ;; this will leave room to strip out grouping too
+      (:onyx.core/flow-conditions event) 
+      (assoc :message (reduce dissoc msg (:exclusions (:routes leaf))))
+      (not-empty task->group-by-fn)
+      (assoc :hash-group (reduce (fn [groups t]
+                                   (if-let [group-fn (task->group-by-fn t)]
+                                     (assoc groups t (hash (group-fn msg)))
+                                     groups))
+                                 {} 
+                                 next-tasks)))))
 
 (defn add-ack-vals [leaf]
   (assoc leaf 

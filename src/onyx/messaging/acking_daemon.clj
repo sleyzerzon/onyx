@@ -47,6 +47,7 @@
 (defn acking-daemon [config]
   (map->AckingDaemon {:opts config}))
 
+;; TODO: evaluate ConcurrentHashMap for use here
 (defn ack-message [daemon message-id completion-id ack-val]
   (let [rets
         (swap!
@@ -55,7 +56,9 @@
             (if-let [ack (get state message-id)]
               (let [updated-ack-val (bit-xor (:ack-val ack) ack-val)]
                 (if (zero? updated-ack-val)
-                  (dissoc state message-id) 
+                  (do (when (zero? (rand-int 1000)) 
+                        (println (- (System/currentTimeMillis) (:timestamp ack))))
+                      (dissoc state message-id)) 
                   (assoc state message-id (assoc ack :ack-val updated-ack-val))))
               (if (zero? ack-val) 
                 state
