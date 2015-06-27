@@ -67,16 +67,17 @@
     (let [leaves (fast-concat (map :leaves results))
           egress-tasks (:egress-ids (:onyx.core/serialized-task event))]
       (when-not (empty? leaves)
-        (let [replica @(:onyx.core/replica event)
+        (let [replica-val @(:onyx.core/replica event)
+              peer-state (:peer-state replica-val)
               segments (build-segments-to-send leaves)
-              groups (group-by (juxt :route :hash-group) segments)
-              allocations (get (:allocations replica) job-id)]
+              groups (group-by #(list (:route %) (:hash-group %)) segments)
+              allocations (get (:allocations replica-val) job-id)]
           (doseq [[[route hash-group] segs] groups]
             (let [peers (get allocations (get egress-tasks route))
-                  active-peers (filter #(= (get-in replica [:peer-state %]) :active) peers)
+                  active-peers (filter #(= (peer-state %) :active) peers)
                   target (pick-peer id active-peers hash-group max-downstream-links)]
               (when target
-                (let [link (operation/peer-link replica (:onyx.core/state event) event target)]
+                (let [link (operation/peer-link replica-val (:onyx.core/state event) event target)]
                   (onyx.extensions/send-messages messenger event link segs)))))
           {}))))
 
@@ -91,12 +92,13 @@
     (let [leaves (fast-concat (map :leaves results))]
       (when-not (empty? leaves)
         (let [replica-val @replica
+              peer-state (:peer-state replica-val)
               segments (build-segments-to-send leaves)
-              groups (group-by (juxt :route :hash-group) segments)
+              groups (group-by #(list (:route %) (:hash-group %)) segments)
               allocations (get (:allocations replica-val) job-id)]
           (doseq [[[route hash-group] segs] groups]
             (let [peers (get allocations (get egress-tasks route))
-                  active-peers (filter #(= (get-in replica-val [:peer-state %]) :active) peers)
+                  active-peers (filter #(= (peer-state %) :active) peers)
                   target (pick-peer id active-peers hash-group max-downstream-links)]
               (when target
                 (let [link (operation/peer-link replica-val state event target)]
